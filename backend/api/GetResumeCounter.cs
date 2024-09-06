@@ -1,5 +1,6 @@
+using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
@@ -12,8 +13,8 @@ namespace Company.Function
     public static class UpdateCountFunction
     {
         [FunctionName("UpdateCount")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+        public static async Task<HttpResponseMessage> Run(
+            [HttpTrigger(AuthorizationLevel.Function, new[] { "get", "post" }, Route = null)] HttpRequest req,
             [CosmosDB(
                 databaseName: "AzureResume",
                 containerName: "Counter",
@@ -29,17 +30,25 @@ namespace Company.Function
             log.LogInformation("C# HTTP trigger function to update count in Cosmos DB.");
 
             // Increment the count
-            document["count"] = (int)document["count"] + 1;
+            int currentCount = (int)document["count"] + 1;
+            document["count"] = currentCount;
 
             // Add the updated document to the collector to replace the item in Cosmos DB
             await updatedDocumentCollector.AddAsync(document);
 
             // Log the updated count
-            string resultMessage = $"Count updated to {document["count"]}";
-            log.LogInformation(resultMessage);
+            log.LogInformation($"Count updated to {currentCount}");
 
-            // Return the result
-            return new OkObjectResult(resultMessage);
+            // Create and return a properly formatted JSON response
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($"{{\"count\": {currentCount}}}", System.Text.Encoding.UTF8, "application/json")
+            };
+            response.Headers.Add("Access-Control-Allow-Origin", "*"); // Allow all origins
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+            return response;
         }
     }
 }
